@@ -21,6 +21,8 @@ public abstract class Pieza {
         return color;
     }
 
+    public void setColor(Color color) {this.color = color;}
+
     public Posicion getPosition() {
         return position;
     }

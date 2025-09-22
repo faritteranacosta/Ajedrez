@@ -14,6 +14,9 @@ public class InfoPartidaPanel extends JPanel {
     private String capturasBlancas = "";
     private String capturasNegras = "";
 
+    private JLabel indicadorTurno;
+    private JPanel panelTurno;
+
     // Colores que combinan con el tablero de ajedrez
     private final Color COLOR_CLARO = new Color(240, 217, 181);  // Color de casillas claras
     private final Color COLOR_OSCURO = new Color(181, 136, 99);  // Color de casillas oscuras
@@ -31,6 +34,16 @@ public class InfoPartidaPanel extends JPanel {
         titulo.setFont(new Font("Arial", Font.BOLD, 16));
         titulo.setForeground(COLOR_TEXTO);
         titulo.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+
+        // Panel para el indicador de turno
+        panelTurno = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        panelTurno.setBackground(COLOR_FONDO);
+        panelTurno.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+
+        indicadorTurno = new JLabel("Turno: BLANCAS");
+        indicadorTurno.setFont(new Font("Arial", Font.BOLD, 14));
+        indicadorTurno.setForeground(COLOR_TEXTO);
+        panelTurno.add(indicadorTurno);
 
         // Lista de movimientos
         movimientosModel = new DefaultListModel<>();
@@ -101,9 +114,25 @@ public class InfoPartidaPanel extends JPanel {
         capturasPanel.add(panelNegras);
 
         // Organizar componentes
-        add(titulo, BorderLayout.NORTH);
+        add(panelTurno, BorderLayout.NORTH);
+        add(titulo, BorderLayout.CENTER);
         add(scrollMovimientos, BorderLayout.CENTER);
         add(capturasPanel, BorderLayout.SOUTH);
+    }
+
+    public void actualizarTurno(org.ajedrez.entity.Color turno) {
+        String texto = "Turno: " + (turno == org.ajedrez.entity.Color.WHITE ? "BLANCAS ♔" : "NEGRAS ♚");
+        indicadorTurno.setFont(new Font("Segoe UI Chess", Font.PLAIN, 25));
+        indicadorTurno.setText(texto);
+
+        // Cambiar color de fondo según el turno
+        if (turno == org.ajedrez.entity.Color.WHITE) {
+            panelTurno.setBackground(new Color(240, 240, 240));
+            indicadorTurno.setForeground(Color.BLACK);  
+        } else {
+            panelTurno.setBackground(new Color(50, 50, 50));
+            indicadorTurno.setForeground(Color.WHITE);
+        }
     }
 
     public void agregarMovimiento(String movimiento) {

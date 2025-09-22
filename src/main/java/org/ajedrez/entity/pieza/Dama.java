@@ -13,7 +13,6 @@ public class Dama extends Pieza{
         super(color, position);
     }
 
-
     @Override
     public List<Movimiento> movimientosPosibles(Tablero tablero) {
         List<Movimiento> movimientos = new ArrayList<>();

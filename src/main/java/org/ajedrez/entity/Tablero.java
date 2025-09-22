@@ -4,9 +4,17 @@ import org.ajedrez.entity.pieza.*;
 
 import java.util.List;
 
+
 public class Tablero {
     private Pieza[][] casillas = new Pieza[8][8];
     private Pieza ultimaCaptura;
+
+    public Tablero() {}
+
+    public Tablero(Tablero tablero) {
+        this.casillas = tablero.casillas;
+        this.ultimaCaptura = tablero.ultimaCaptura;
+    }
 
     public void inicializarTablero() {
         // --------------------
@@ -42,6 +50,9 @@ public class Tablero {
         }
     }
 
+    public void setCasilla(Pieza pieza, Posicion pos) {
+        casillas[pos.getFila()][pos.getColumna()] = pieza;
+    }
 
     public Pieza getPieza(@org.jetbrains.annotations.NotNull Posicion pos) {
         return casillas[pos.getFila()][pos.getColumna()];
@@ -72,6 +83,36 @@ public class Tablero {
             ultimaCaptura = capturada;
             System.out.println("Se capturó: " + capturada.getClass().getSimpleName());
         }
+    }
+
+    public boolean esJaque(Color color) {
+        Posicion reyPos = encontrarRey(color);
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                Pieza p = casillas[i][j];
+                if(p != null && p.getColor() != color){
+                    List<Movimiento> movs = p.movimientosPosibles(this);
+                    for (Movimiento mov : movs) {
+                        if(mov.getDestino().equals(reyPos)){
+                            return true;
+                        }
+                    }
+
+                }
+            }
+        }
+        return false;
+    }
+
+    private Posicion encontrarRey(Color color) {
+        for (int fila = 0; fila < 8; fila++) {
+            for (int col = 0; col < 8; col++) {
+                if (casillas[fila][col] instanceof Rey && casillas[fila][col].getColor().equals(color)) {
+                    return new Posicion(fila, col);
+                }
+            }
+        }
+        return null;
     }
 
 

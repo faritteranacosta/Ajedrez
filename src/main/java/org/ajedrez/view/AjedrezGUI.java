@@ -1,5 +1,7 @@
 package org.ajedrez.view;
 
+import org.ajedrez.entity.pieza.Pieza;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -24,6 +26,7 @@ public class AjedrezGUI extends JFrame {
 
         add(tableroPanel, BorderLayout.CENTER);
         add(infoPanel, BorderLayout.EAST);
+
     }
 
     public static void main(String[] args) {

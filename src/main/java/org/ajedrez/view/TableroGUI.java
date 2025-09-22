@@ -39,8 +39,8 @@ class TableroGUI extends JPanel {
         setBorder(BorderFactory.createLineBorder(new Color(80, 58, 43), 4));
 
         // Crear jugadores y partida
-        Jugador jugadorBlanco = new Jugador("Blanco", org.ajedrez.entity.Color.WHITE);
-        Jugador jugadorNegro = new Jugador("Negro", org.ajedrez.entity.Color.BLACK);
+        Jugador jugadorBlanco = new Jugador("Player 1", org.ajedrez.entity.Color.WHITE);
+        Jugador jugadorNegro = new Jugador("Player 2", org.ajedrez.entity.Color.BLACK);
 
         this.partida = new Partida(jugadorBlanco, jugadorNegro);
         this.tablero = partida.getTablero();
@@ -68,7 +68,7 @@ class TableroGUI extends JPanel {
                         movimientosPosibles = pieza.movimientosPosibles(tablero);
                     }
                 } else {
-                    // Verificar si es un movimiento válido
+
                     boolean movimientoValido = false;
                     for (Movimiento mov : movimientosPosibles) {
                         if (mov.getDestino().equals(clic)) {
@@ -76,12 +76,12 @@ class TableroGUI extends JPanel {
                             break;
                         }
                     }
-                    String notacion = obtenerNotacionAlgebraica(seleccionada, clic);
-                    if (movimientoValido && partida.moverPieza(seleccionada, clic)) {
-                        // Registrar movimiento en notación algebraica
-                        if (infoPanel != null) {
-                            infoPanel.agregarMovimiento(notacion);
 
+                    String notacion = obtenerNotacionAlgebraica(seleccionada, clic);
+                    Pieza pieza = tablero.getPieza(seleccionada);
+                    if (infoPanel != null) {
+                        if(movimientoValido){
+                            infoPanel.agregarMovimiento(notacion);
                             Pieza capturada = tablero.getUltimaCaptura();
                             if (capturada != null) {
                                 String simbolo = getSimboloPieza(capturada);
@@ -91,6 +91,24 @@ class TableroGUI extends JPanel {
                             }
                         }
                     }
+                    // Si es peón y llega a la última fila → promoción
+                    if (pieza instanceof Peon &&
+                            ((pieza.getColor() == org.ajedrez.entity.Color.WHITE && clic.getFila() == 0) ||
+                                    (pieza.getColor() == org.ajedrez.entity.Color.BLACK && clic.getFila() == 7))) {
+
+                        Pieza promocion = elegirPromocion(pieza.getColor(), clic);
+                        partida.moverPieza(seleccionada, clic, promocion);
+                        if (infoPanel != null) {
+                            infoPanel.actualizarTurno(partida.getTurnoActual());
+                        }
+
+                    } else {
+                        partida.moverPieza(seleccionada, clic, null);
+                        if (infoPanel != null) {
+                            infoPanel.actualizarTurno(partida.getTurnoActual());
+                        }
+                    }
+
                     seleccionada = null;
                     movimientosPosibles.clear();
                 }
@@ -276,9 +294,107 @@ class TableroGUI extends JPanel {
         seleccionada = null;
         movimientosPosibles.clear();
         partida = new Partida(
-                new Jugador("Blanco", org.ajedrez.entity.Color.WHITE),
-                new Jugador("Negro", org.ajedrez.entity.Color.BLACK)
+                new Jugador("Player 1", org.ajedrez.entity.Color.WHITE),
+                new Jugador("Player 2", org.ajedrez.entity.Color.BLACK)
         );
         repaint();
     }
+
+    private Pieza elegirPromocion(org.ajedrez.entity.Color color, Posicion destino) {
+        // Colores consistentes con el diseño
+        Color COLOR_FONDO = new Color(80, 58, 43);
+        Color COLOR_CLARO = new Color(240, 217, 181);
+        Color COLOR_OSCURO = new Color(181, 136, 99);
+        Color COLOR_TEXTO = new Color(240, 240, 240);
+        Color COLOR_BOTON = new Color(120, 90, 70);
+        Color COLOR_BOTON_HOVER = new Color(150, 110, 85);
+
+        // Crear un panel personalizado
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBackground(COLOR_FONDO);
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        // Título
+        JLabel titulo = new JLabel("Elige una pieza para la promoción:", SwingConstants.CENTER);
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titulo.setForeground(COLOR_TEXTO);
+        titulo.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0));
+
+        // Panel de botones
+        JPanel panelBotones = new JPanel(new GridLayout(1, 4, 10, 0));
+        panelBotones.setBackground(COLOR_FONDO);
+        panelBotones.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Símbolos Unicode de las piezas
+        String[] simbolos = {"♕", "♖", "♗", "♘"};
+        String[] nombres = {"Dama", "Torre", "Alfil", "Caballo"};
+
+        JButton[] botones = new JButton[4];
+        int[] seleccion = new int[1]; // Array para capturar la selección
+
+        for (int i = 0; i < 4; i++) {
+            botones[i] = new JButton("<html><center>" + simbolos[i] + "<br>" + nombres[i] + "</center></html>");
+            botones[i].setFont(new Font("Segoe UI", Font.BOLD, 24));
+            botones[i].setBackground(COLOR_BOTON);
+            botones[i].setForeground(COLOR_TEXTO);
+            botones[i].setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(COLOR_OSCURO, 2),
+                    BorderFactory.createEmptyBorder(15, 10, 15, 10)
+            ));
+            botones[i].setFocusPainted(false);
+            botones[i].setContentAreaFilled(true);
+            botones[i].setOpaque(true);
+
+            // Efecto hover
+            botones[i].addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    ((JButton) e.getSource()).setBackground(COLOR_BOTON_HOVER);
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    ((JButton) e.getSource()).setBackground(COLOR_BOTON);
+                }
+            });
+
+            final int index = i;
+            botones[i].addActionListener(e -> {
+                seleccion[0] = index;
+                // Cerrar el diálogo
+                Window window = SwingUtilities.getWindowAncestor(panel);
+                if (window != null) {
+                    window.dispose();
+                }
+            });
+
+            panelBotones.add(botones[i]);
+        }
+
+        panel.add(titulo, BorderLayout.NORTH);
+        panel.add(panelBotones, BorderLayout.CENTER);
+
+        // Crear el diálogo personalizado
+        JDialog dialog = new JDialog((Frame) null, "Promoción de Peón", true);
+        dialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        dialog.getContentPane().setBackground(COLOR_FONDO);
+        dialog.setResizable(false);
+        dialog.setContentPane(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this); // Centrar respecto al tablero
+
+        // Mostrar el diálogo (bloqueante)
+        dialog.setVisible(true);
+
+        // Retornar la pieza seleccionada
+        switch (seleccion[0]) {
+            case 1: return new Torre(color, destino);
+            case 2: return new Alfil(color, destino);
+            case 3: return new Caballo(color, destino);
+            default: return new Dama(color, destino); // Por defecto Dama (0)
+        }
+    }
+
+
+
 }

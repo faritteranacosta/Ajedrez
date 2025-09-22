@@ -1,5 +1,6 @@
 package org.ajedrez.entity;
 
+import org.ajedrez.entity.pieza.Dama;
 import org.ajedrez.entity.pieza.Pieza;
 
 import java.util.ArrayList;
@@ -21,19 +22,34 @@ public class Partida {
         this.movimientos = new ArrayList<>();
     }
 
-    public boolean moverPieza(Posicion origen, Posicion destino) {
+    public boolean moverPieza(Posicion origen, Posicion destino, Pieza promocion) {
         Pieza pieza = tablero.getPieza(origen);
         if (pieza == null || pieza.getColor() != turnoActual) return false;
+
         List<Movimiento> posibles = pieza.movimientosPosibles(tablero);
         for (Movimiento mov : posibles) {
             if (mov.getDestino().equals(destino)) {
                 tablero.moverPieza(mov);
+
+                if(promocion != null) {
+                    tablero.setCasilla(promocion, mov.getDestino());
+                }
+
                 movimientos.add(mov);
                 turnoActual = (turnoActual == Color.WHITE) ? Color.BLACK : Color.WHITE;
                 return true;
             }
         }
         return false;
+    }
+
+    private void pormover(Posicion origen, Movimiento mov, Pieza pieza) {
+        pieza.setPosition(origen);
+        pieza.setColor(turnoActual);
+        tablero.setCasilla(pieza, origen);
+        tablero.moverPieza(mov);
+        movimientos.add(mov);
+        turnoActual = (turnoActual == Color.WHITE) ? Color.BLACK : Color.WHITE;
     }
 
     public Tablero getTablero() {
