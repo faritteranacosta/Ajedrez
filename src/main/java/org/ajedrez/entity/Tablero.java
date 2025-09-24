@@ -9,6 +9,7 @@ public class Tablero {
     private Pieza[][] casillas = new Pieza[8][8];
     private Pieza ultimaCaptura;
 
+
     public Tablero() {}
 
     public Tablero(Tablero tablero) {
@@ -20,34 +21,17 @@ public class Tablero {
         // --------------------
         // Piezas BLANCAS
         // --------------------
-        casillas[0][0] = new Torre(Color.BLACK, new Posicion(0, 0));
-        casillas[0][1] = new Caballo(Color.BLACK, new Posicion(0, 1));
-        casillas[0][2] = new Alfil(Color.BLACK, new Posicion(0, 2));
-        casillas[0][3] = new Dama(Color.BLACK, new Posicion(0, 3));
         casillas[0][4] = new Rey(Color.BLACK, new Posicion(0, 4));
-        casillas[0][5] = new Alfil(Color.BLACK, new Posicion(0, 5));
-        casillas[0][6] = new Caballo(Color.BLACK, new Posicion(0, 6));
         casillas[0][7] = new Torre(Color.BLACK, new Posicion(0, 7));
 
-        for (int col = 0; col < 8; col++) {
-            casillas[1][col] = new Peon(Color.BLACK, new Posicion(1, col));
-        }
 
         // --------------------
         // Piezas NEGRAS
         // --------------------
         casillas[7][0] = new Torre(Color.WHITE, new Posicion(7, 0));
-        casillas[7][1] = new Caballo(Color.WHITE, new Posicion(7, 1));
-        casillas[7][2] = new Alfil(Color.WHITE, new Posicion(7, 2));
-        casillas[7][3] = new Dama(Color.WHITE, new Posicion(7, 3));
         casillas[7][4] = new Rey(Color.WHITE, new Posicion(7, 4));
-        casillas[7][5] = new Alfil(Color.WHITE, new Posicion(7, 5));
-        casillas[7][6] = new Caballo(Color.WHITE, new Posicion(7, 6));
-        casillas[7][7] = new Torre(Color.WHITE, new Posicion(7, 7));
+        casillas[6][7] = new Peon(Color.WHITE, new Posicion(6, 7));
 
-        for (int col = 0; col < 8; col++) {
-            casillas[6][col] = new Peon(Color.WHITE, new Posicion(6, col));
-        }
     }
 
     public void setCasilla(Pieza pieza, Posicion pos) {
@@ -63,6 +47,32 @@ public class Tablero {
         Posicion destino = mov.getDestino();
         Pieza pieza = casillas[origen.getFila()][origen.getColumna()];
 
+        // Manejar enroque
+        if (mov.isEsEnroque()) {
+            int fila = origen.getFila();
+
+            if (destino.getColumna() == 6) { // Enroque corto
+                // Mover la torre
+                Pieza torre = casillas[fila][7];
+                casillas[fila][5] = torre;
+                if (torre != null) {
+                    torre.setPosicion(new Posicion(fila, 5));
+                }
+                casillas[fila][7] = null;
+                mov.setEsEnroqueCorto(true);
+
+            } else if (destino.getColumna() == 2) { // Enroque largo
+                // Mover la torre
+                Pieza torre = casillas[fila][0];
+                casillas[fila][3] = torre;
+                if (torre != null) {
+                    torre.setPosicion(new Posicion(fila, 3));
+                }
+                casillas[fila][0] = null;
+                mov.setEsEnroqueCorto(false);
+            }
+        }
+
         // Si había una pieza en destino, es capturada
         Pieza capturada = casillas[destino.getFila()][destino.getColumna()];
 
@@ -77,37 +87,18 @@ public class Tablero {
         mov.setPiezaMovida(pieza);
         mov.setPiezaCapturada(capturada);
 
-        System.out.println("Movimiento: " + pieza.getClass().getSimpleName() +
-                " de " + origen + " a " + destino);
-        if (capturada != null) {
-            ultimaCaptura = capturada;
-            System.out.println("Se capturó: " + capturada.getClass().getSimpleName());
+        // Marcar que el rey y la torre se han movido
+        if (pieza instanceof Torre) {
+            ((Torre) pieza).setMovida(true);
+        } else if (pieza instanceof Rey) {
+            ((Rey) pieza).setHaMovido(true);
         }
     }
 
-    public boolean esJaque(Color color) {
-        Posicion reyPos = encontrarRey(color);
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                Pieza p = casillas[i][j];
-                if(p != null && p.getColor() != color){
-                    List<Movimiento> movs = p.movimientosPosibles(this);
-                    for (Movimiento mov : movs) {
-                        if(mov.getDestino().equals(reyPos)){
-                            return true;
-                        }
-                    }
-
-                }
-            }
-        }
-        return false;
-    }
-
-    private Posicion encontrarRey(Color color) {
+    public Posicion encontrarRey(Color color) {
         for (int fila = 0; fila < 8; fila++) {
             for (int col = 0; col < 8; col++) {
-                if (casillas[fila][col] instanceof Rey && casillas[fila][col].getColor().equals(color)) {
+                if (casillas[fila][col] instanceof Rey && casillas[fila][col].getColor() == color) {
                     return new Posicion(fila, col);
                 }
             }
@@ -115,6 +106,46 @@ public class Tablero {
         return null;
     }
 
+    public Tablero copiar() {
+        Tablero copia = new Tablero();
+        for (int fila = 0; fila < 8; fila++) {
+            for (int col = 0; col < 8; col++) {
+                Posicion pos = new Posicion(fila, col);
+                Pieza original = getPieza(pos);
+                if (original != null) {
+                    // Necesitarías implementar un método copy() en cada pieza
+                    Pieza copiaPieza = copiarPieza(original);
+                    copia.colocarPieza(copiaPieza, pos);
+                }
+            }
+        }
+        return copia;
+    }
+
+    private Pieza copiarPieza(Pieza original) {
+        // Implementar según tus clases de piezas
+        if (original instanceof Rey) return new Rey(original.getColor(), original.getPosition());
+        if (original instanceof Dama) return new Dama(original.getColor(), original.getPosition());
+        if (original instanceof Torre) return new Torre(original.getColor(), original.getPosition());
+        if (original instanceof Alfil) return new Alfil(original.getColor(), original.getPosition());
+        if (original instanceof Caballo) return new Caballo(original.getColor(), original.getPosition());
+        if (original instanceof Peon) return new Peon(original.getColor(), original.getPosition());
+        return null;
+    }
+
+    private boolean esPosicionValida(Posicion posicion) {
+        return posicion.getFila() >= 0 && posicion.getFila() < 8 &&
+                posicion.getColumna() >= 0 && posicion.getColumna() < 8;
+    }
+
+    public void colocarPieza(Pieza pieza, Posicion posicion) {
+        if (esPosicionValida(posicion)) {
+            casillas[posicion.getFila()][posicion.getColumna()] = pieza;
+            if (pieza != null) {
+                pieza.setPosition(posicion); // Actualizar la posición de la pieza
+            }
+        }
+    }
 
     public Pieza getUltimaCaptura() {
         return ultimaCaptura;
