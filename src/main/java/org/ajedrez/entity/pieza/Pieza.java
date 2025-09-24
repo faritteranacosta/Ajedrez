@@ -9,8 +9,8 @@ import org.ajedrez.entity.Tablero;
 import java.util.List;
 
 public abstract class Pieza {
-    Color color;
-    Posicion position;
+    protected Color color;
+    protected Posicion position;
 
     public Pieza(Color color, Posicion position) {
         this.color = color;
