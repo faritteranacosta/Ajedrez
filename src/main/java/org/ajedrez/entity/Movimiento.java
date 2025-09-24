@@ -7,6 +7,8 @@ public class Movimiento {
     private Posicion destino;
     private Pieza piezaMovida;
     private Pieza piezaCapturada;
+    private boolean esEnroque = false;
+    private boolean esEnroqueCorto = false;
 
     public Movimiento(Posicion origen, Posicion destino,  Pieza piezaMovida, Pieza piezaCapturada) {
         this.origen = origen;
@@ -43,8 +45,25 @@ public class Movimiento {
         return origen != null && destino != null && piezaMovida != null;
     }
 
+    public boolean isEsEnroque() {
+        return esEnroque;
+    }
+
+    public void setEsEnroque(boolean esEnroque) {
+        this.esEnroque = esEnroque;
+    }
+
+    public boolean isEsEnroqueCorto() {
+        return esEnroqueCorto;
+    }
+
+    public void setEsEnroqueCorto(boolean esEnroqueCorto) {
+        this.esEnroqueCorto = esEnroqueCorto;
+    }
+
     @Override
     public String toString() {
         return "Movimiento{, destino=" + destino + '}';
     }
+
 }
