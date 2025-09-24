@@ -3,19 +3,18 @@ package org.ajedrez.view;
 import org.ajedrez.entity.*;
 import org.ajedrez.entity.pieza.*;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.Color;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 class TableroGUI extends JPanel {
     private static final int SIZE = 8; // 8x8
-    private static final int CELL_SIZE = 70;
+
+    private int cellSize;
 
     private Partida partida;
     private Tablero tablero;
@@ -35,8 +34,10 @@ class TableroGUI extends JPanel {
     }
 
     public TableroGUI() {
-        setPreferredSize(new Dimension(SIZE * CELL_SIZE, SIZE * CELL_SIZE));
+        setPreferredSize(new Dimension(540, 540));
         setBorder(BorderFactory.createLineBorder(new Color(80, 58, 43), 4));
+
+        cellSize = Math.min(getWidth() / SIZE, getHeight() / SIZE);
 
         // Crear jugadores y partida
         Jugador jugadorBlanco = new Jugador("Player 1", org.ajedrez.entity.Color.WHITE);
@@ -51,8 +52,20 @@ class TableroGUI extends JPanel {
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                int col = e.getX() / CELL_SIZE;
-                int fila = e.getY() / CELL_SIZE;
+                if (partida.isJuegoTerminado()) {
+                    mostrarResultadoPartida();
+                    return;
+                }
+
+                int panelWidth = getWidth();
+                int panelHeight = getHeight();
+                int currentCellSize = Math.min(panelWidth / SIZE, panelHeight / SIZE);
+                int offsetX = (panelWidth - (SIZE * currentCellSize)) / 2;
+                int offsetY = (panelHeight - (SIZE * currentCellSize)) / 2;
+
+                // Ajustar coordenadas del clic
+                int col = (e.getX() - offsetX) / currentCellSize;
+                int fila = (e.getY() - offsetY) / currentCellSize;
 
                 // Verificar que el clic está dentro del tablero
                 if (fila < 0 || fila >= SIZE || col < 0 || col >= SIZE) {
@@ -62,13 +75,19 @@ class TableroGUI extends JPanel {
                 Posicion clic = new Posicion(fila, col);
 
                 if (seleccionada == null) {
+                    // Fase de selección de pieza
                     Pieza pieza = tablero.getPieza(clic);
                     if (pieza != null && pieza.getColor() == partida.getTurnoActual()) {
                         seleccionada = clic;
-                        movimientosPosibles = pieza.movimientosPosibles(tablero);
+                        movimientosPosibles = partida.obtenerMovimientosLegales(pieza);
+
+                        // Mostrar mensaje si el rey está en jaque
+                        if (partida.estaEnJaque(partida.getTurnoActual()) && infoPanel != null) {
+                            infoPanel.mostrarEstado("¡Rey en jaque! Debes protegerlo", true);
+                        }
                     }
                 } else {
-
+                    // Fase de movimiento
                     boolean movimientoValido = false;
                     for (Movimiento mov : movimientosPosibles) {
                         if (mov.getDestino().equals(clic)) {
@@ -77,35 +96,112 @@ class TableroGUI extends JPanel {
                         }
                     }
 
-                    String notacion = obtenerNotacionAlgebraica(seleccionada, clic);
-                    Pieza pieza = tablero.getPieza(seleccionada);
-                    if (infoPanel != null) {
-                        if(movimientoValido){
-                            infoPanel.agregarMovimiento(notacion);
-                            Pieza capturada = tablero.getUltimaCaptura();
-                            if (capturada != null) {
-                                String simbolo = getSimboloPieza(capturada);
-                                boolean capturadaPorBlancas = (capturada.getColor() == org.ajedrez.entity.Color.BLACK);
-                                infoPanel.agregarCaptura(simbolo, capturadaPorBlancas);
-                                tablero.nullUltimaCapturada();
-                            }
-                        }
+                    if (!movimientoValido) {
+                        // Movimiento inválido
+                        seleccionada = null;
+                        movimientosPosibles.clear();
+                        repaint();
+                        return;
                     }
-                    // Si es peón y llega a la última fila → promoción
+
+                    Pieza pieza = tablero.getPieza(seleccionada);
+                    String notacion = obtenerNotacionAlgebraica(seleccionada, clic);
+
+                    // Verificar si es enroque para el evento especial
+                    boolean esEnroque = false;
+                    boolean esEnroqueCorto = false;
+                    if (pieza instanceof Rey && Math.abs(clic.getColumna() - seleccionada.getColumna()) == 2) {
+                        esEnroque = true;
+                        esEnroqueCorto = (clic.getColumna() == 6);
+                    }
+
+                    // Procesar movimiento según tipo de pieza
+                    boolean movimientoRealizado = false;
+
+                    // Promoción de peón
                     if (pieza instanceof Peon &&
                             ((pieza.getColor() == org.ajedrez.entity.Color.WHITE && clic.getFila() == 0) ||
                                     (pieza.getColor() == org.ajedrez.entity.Color.BLACK && clic.getFila() == 7))) {
 
                         Pieza promocion = elegirPromocion(pieza.getColor(), clic);
-                        partida.moverPieza(seleccionada, clic, promocion);
-                        if (infoPanel != null) {
-                            infoPanel.actualizarTurno(partida.getTurnoActual());
-                        }
+                        movimientoRealizado = partida.moverPieza(seleccionada, clic, promocion);
 
+                        if (movimientoRealizado && infoPanel != null) {
+                            infoPanel.agregarPromocion(getSimboloPieza(promocion));
+                        }
                     } else {
-                        partida.moverPieza(seleccionada, clic, null);
+                        // Movimiento normal
+                        movimientoRealizado = partida.moverPieza(seleccionada, clic, null);
+                    }
+
+                    if (movimientoRealizado) {
+                        // AGREGAR EVENTOS AL PANEL DE INFORMACIÓN
                         if (infoPanel != null) {
+                            // 1. Movimiento normal
+                            infoPanel.agregarMovimiento(notacion);
+
+                            // 2. Captura
+                            Pieza capturada = tablero.getUltimaCaptura();
+                            if (capturada != null) {
+                                String simbolo = getSimboloPieza(capturada);
+                                boolean capturadaPorBlancas = (capturada.getColor() == org.ajedrez.entity.Color.BLACK);
+                                infoPanel.agregarCaptura(simbolo, capturadaPorBlancas);
+                                infoPanel.agregarCapturaEspecial(getSimboloPieza(capturada));
+                                tablero.nullUltimaCapturada();
+                            }
+
+                            // 3. Enroque
+                            if (esEnroque) {
+                                infoPanel.agregarEnroque(esEnroqueCorto);
+                            }
+
+                            // 4. Estado del juego después del movimiento
+                            org.ajedrez.entity.Color turnoAnterior = (partida.getTurnoActual() == org.ajedrez.entity.Color.WHITE) ?
+                                    org.ajedrez.entity.Color.BLACK : org.ajedrez.entity.Color.WHITE;
+                            org.ajedrez.entity.Color siguienteTurno = partida.getTurnoActual();
+
+                            // Verificar jaque mate
+                            if (partida.estaEnJaqueMate(siguienteTurno)) {
+                                infoPanel.agregarJaqueMate(turnoAnterior);
+                            }
+                            // Verificar ahogado
+                            else if (partida.estaAhogado(siguienteTurno)) {
+                                infoPanel.agregarAhogado();
+                            }
+                            // Verificar jaque simple
+                            else if (partida.estaEnJaque(siguienteTurno)) {
+                                infoPanel.agregarJaque();
+                            } else {
+                                infoPanel.limpiarEstado();
+                            }
+
+                            // 5. Actualizar turno
                             infoPanel.actualizarTurno(partida.getTurnoActual());
+
+                            // 6. Verificar finales de tablas automáticos
+                            if (partida.isJuegoTerminado() && partida.getResultado() != null) {
+                                switch (partida.getResultado()) {
+                                    case "TABLAS_MATERIAL_INSUFICIENTE":
+                                        infoPanel.agregarTablasMaterial();
+                                        break;
+                                    case "TABLAS_50_MOVIMIENTOS":
+                                        infoPanel.agregarTablas50Movimientos();
+                                        break;
+                                    case "TABLAS_TRIPLE_REPETICION":
+                                        infoPanel.agregarEventoEspecial("Tablas - Triple repetición", COLOR_CLARO);
+                                        break;
+                                }
+                            }
+                        }
+                    } else {
+                        // Movimiento fallido - mostrar mensaje de error
+                        if (infoPanel != null) {
+                            infoPanel.mostrarEstado("Movimiento no válido", true);
+                            // Limpiar después de 2 segundos
+                            new Timer(2000, evt -> {
+                                infoPanel.limpiarEstado();
+                                ((Timer)evt.getSource()).stop();
+                            }).start();
                         }
                     }
 
@@ -117,47 +213,97 @@ class TableroGUI extends JPanel {
         });
     }
 
+    // Método auxiliar para mostrar resultado final
+    private void mostrarResultadoPartida() {
+        String resultado = partida.getDescripcionResultado();
+        int tipoMensaje = JOptionPane.INFORMATION_MESSAGE;
+
+        if (resultado.contains("Jaque Mate") || resultado.contains("Abandono")) {
+            tipoMensaje = JOptionPane.WARNING_MESSAGE;
+        }
+
+        JOptionPane.showMessageDialog(this, resultado, "Fin de la Partida", tipoMensaje);
+
+        // Opción para nueva partida
+        int respuesta = JOptionPane.showConfirmDialog(this,
+                "¿Deseas comenzar una nueva partida?",
+                "Nueva Partida",
+                JOptionPane.YES_NO_OPTION);
+
+        if (respuesta == JOptionPane.YES_OPTION) {
+            reiniciarPartida();
+            if (infoPanel != null) {
+                infoPanel.reiniciarPartida();
+                partida.reiniciar();
+            }
+        }
+    }
+
+    // Método auxiliar para agregar eventos genéricos (si necesitas más flexibilidad)
+    private void agregarEventoInfoPanel(String evento) {
+        if (infoPanel != null) {
+            // Buscar método específico o usar genérico
+            if (evento.contains("JAQUE MATE")) {
+                org.ajedrez.entity.Color ganador = evento.contains("blancas") ? org.ajedrez.entity.Color.WHITE : org.ajedrez.entity.Color.BLACK;
+                infoPanel.agregarJaqueMate(ganador);
+            } else if (evento.contains("JAQUE")) {
+                infoPanel.agregarJaque();
+            } else if (evento.contains("Tablas")) {
+                infoPanel.agregarTablasAcuerdo();
+            } else {
+                infoPanel.agregarEventoEspecial(evento, COLOR_CLARO);
+            }
+        }
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-
         Graphics2D g2d = (Graphics2D) g;
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // Calcular cellSize basado en el tamaño actual del panel
+        int panelWidth = getWidth();
+        int panelHeight = getHeight();
+        cellSize = Math.min(panelWidth / SIZE, panelHeight / SIZE);
+
+        // Centrar el tablero
+        int offsetX = (panelWidth - (SIZE * cellSize)) / 2;
+        int offsetY = (panelHeight - (SIZE * cellSize)) / 2;
 
         // Pintar casillas
         for (int fila = 0; fila < SIZE; fila++) {
             for (int col = 0; col < SIZE; col++) {
                 boolean esClaro = (fila + col) % 2 == 0;
                 g2d.setColor(esClaro ? COLOR_CLARO : COLOR_OSCURO);
-                g2d.fillRect(col * CELL_SIZE, fila * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                g2d.fillRect(offsetX + col * cellSize, offsetY + fila * cellSize, cellSize, cellSize);
             }
         }
 
         // Dibujar coordenadas
-        dibujarCoordenadas(g2d);
+        dibujarCoordenadas(g2d, offsetX, offsetY);
 
         // Resaltar movimientos posibles
         for (Movimiento mov : movimientosPosibles) {
-            int x = mov.getDestino().getColumna() * CELL_SIZE;
-            int y = mov.getDestino().getFila() * CELL_SIZE;
+            int x = offsetX + mov.getDestino().getColumna() * cellSize;
+            int y = offsetY + mov.getDestino().getFila() * cellSize;
 
-            // Diferente color para movimientos de captura
             Pieza piezaDestino = tablero.getPieza(mov.getDestino());
             if (piezaDestino != null && piezaDestino.getColor() != partida.getTurnoActual()) {
                 g2d.setColor(COLOR_MOVIMIENTOS_CAPTURA);
-                g2d.fillRect(x, y, CELL_SIZE, CELL_SIZE);
+                g2d.fillRect(x, y, cellSize, cellSize);
             } else {
                 g2d.setColor(COLOR_MOVIMIENTOS);
-                g2d.fillOval(x + CELL_SIZE / 4, y + CELL_SIZE / 4, CELL_SIZE / 2, CELL_SIZE / 2);
+                g2d.fillOval(x + cellSize / 4, y + cellSize / 4, cellSize / 2, cellSize / 2);
             }
         }
 
         // Resaltar casilla seleccionada
         if (seleccionada != null) {
             g2d.setColor(COLOR_SELECCION);
-            g2d.fillRect(seleccionada.getColumna() * CELL_SIZE,
-                    seleccionada.getFila() * CELL_SIZE,
-                    CELL_SIZE, CELL_SIZE);
+            g2d.fillRect(offsetX + seleccionada.getColumna() * cellSize,
+                    offsetY + seleccionada.getFila() * cellSize,
+                    cellSize, cellSize);
         }
 
         // Dibujar piezas
@@ -165,46 +311,78 @@ class TableroGUI extends JPanel {
             for (int col = 0; col < SIZE; col++) {
                 Pieza pieza = tablero.getPieza(new Posicion(fila, col));
                 if (pieza != null) {
-                    dibujarPieza(g2d, pieza, fila, col);
+                    dibujarPieza(g2d, pieza, fila, col, offsetX, offsetY);
                 }
             }
         }
+
+        if (partida.isJuegoTerminado()) {
+            dibujarFinPartida(g2d);
+        }
     }
 
-    private void dibujarCoordenadas(Graphics2D g2d) {
-        g2d.setFont(new Font("Arial", Font.PLAIN, 12));
+    private void dibujarFinPartida(Graphics2D g2d) {
+        // Fondo semitransparente
+        g2d.setColor(new Color(0, 0, 0, 150));
+        g2d.fillRect(0, 0, getWidth(), getHeight());
+
+        // Mensaje centrado
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Segoe UI Chess", Font.BOLD, 24));
+        String mensaje = partida.getDescripcionResultado();
+
+        FontMetrics fm = g2d.getFontMetrics();
+        int x = (getWidth() - fm.stringWidth(mensaje)) / 2;
+        int y = getHeight() / 2;
+
+        g2d.drawString(mensaje, x, y);
+
+        // Instrucciones para nueva partida
+        g2d.setFont(new Font("Segoe UI Chess", Font.PLAIN, 14));
+        String instruccion = "Haz clic para comenzar una nueva partida";
+        x = (getWidth() - fm.stringWidth(instruccion)) / 2;
+        g2d.drawString(instruccion, x, y + 30);
+    }
+
+    private void dibujarCoordenadas(Graphics2D g2d, int offsetX, int offsetY) {
+        g2d.setFont(new Font("Arial", Font.PLAIN, Math.max(10, cellSize / 7)));
         g2d.setColor(Color.DARK_GRAY);
 
-        // Coordenadas de letras (a-h) en la parte inferior
+        // Coordenadas de letras (a-h)
         for (int col = 0; col < SIZE; col++) {
             String letra = String.valueOf((char)('a' + col));
             g2d.drawString(letra,
-                    col * CELL_SIZE + CELL_SIZE / 2 - 5,
-                    SIZE * CELL_SIZE - 5);
+                    offsetX + col * cellSize + cellSize / 2 -3,
+                    offsetY + SIZE * cellSize - 10);
         }
 
-        // Coordenadas de números (1-8) en el lado izquierdo
+        // Coordenadas de números (1-8)
         for (int fila = 0; fila < SIZE; fila++) {
             String numero = String.valueOf(8 - fila);
             g2d.drawString(numero,
-                    5,
-                    fila * CELL_SIZE + CELL_SIZE / 2 + 5);
+                    offsetX + 5,
+                    offsetY + fila * cellSize + cellSize / 2 );
         }
     }
 
-    private void dibujarPieza(Graphics2D g2d, Pieza pieza, int fila, int col) {
+    private void dibujarPieza(Graphics2D g2d, Pieza pieza, int fila, int col, int offsetX, int offsetY) {
         String simbolo = getSimboloPieza(pieza);
         boolean esBlanca = pieza.getColor() == org.ajedrez.entity.Color.WHITE;
 
+        // Tamaño de fuente responsive
+        int fontSize = Math.max(20, (int)(cellSize * 0.6));
+        g2d.setFont(new Font("Segoe UI Chess", Font.PLAIN, fontSize));
 
-        // Sombra para mejor contraste
-        g2d.setFont(new Font("Segoe UI Chess", Font.PLAIN, 45));
+        int x = offsetX + col * cellSize;
+        int y = offsetY + fila * cellSize;
+
+        // Sombra
         g2d.setColor(esBlanca ? new Color(0, 0, 0, 30) : new Color(255, 255, 255, 30));
-        g2d.drawString(simbolo, col * CELL_SIZE + 15, fila * CELL_SIZE + 50);
+        g2d.drawString(simbolo, x + cellSize/4, y + cellSize*3/4);
 
         // Pieza principal
         g2d.setColor(esBlanca ? Color.WHITE : Color.BLACK);
-        g2d.drawString(simbolo, col * CELL_SIZE + 10, fila * CELL_SIZE + 50);
+        g2d.drawString(simbolo, (x + cellSize/4 - 2)-2, y + cellSize*3/4 - 2);
     }
 
     private String getSimboloPieza(Pieza pieza) {
@@ -217,13 +395,24 @@ class TableroGUI extends JPanel {
         return "?";
     }
 
+
+
     private String obtenerNotacionAlgebraica(Posicion origen, Posicion destino) {
         Pieza pieza = tablero.getPieza(origen);
         StringBuilder notacion = new StringBuilder();
 
+        if (pieza instanceof Rey) {
+            int diferenciaCol = destino.getColumna() - origen.getColumna();
+            if (diferenciaCol == 2) {
+                return "O-O";     // Enroque corto
+            } else if (diferenciaCol == -2) {
+                return "O-O-O";   // Enroque largo
+            }
+        }
+
         // Pieza (excepto peones)
         if (!(pieza instanceof Peon)) {
-            notacion.append(getLetraPieza(pieza));
+            notacion.append(getSimboloPieza(pieza));
 
         }
 
@@ -246,57 +435,11 @@ class TableroGUI extends JPanel {
         return notacion.toString();
     }
 
-    private String getLetraPieza(Pieza pieza) {
-        if (pieza instanceof Rey) return "K";
-        if (pieza instanceof Dama) return "Q";
-        if (pieza instanceof Torre) return "R";
-        if (pieza instanceof Alfil) return "B";
-        if (pieza instanceof Caballo) return "N";
-        if (pieza instanceof Peon) return "E";
-        return "";
-    }
 
-    private void dibujarPiezaConImagen(Graphics2D g2d, Pieza pieza, int fila, int col) {
-        String nombreImagen = getNombreImagenPieza(pieza);
-
-        try {
-            Image imagen = ImageIO.read(getClass().getResource("/piezas/" + nombreImagen));
-            int nuevoAncho = (int) (CELL_SIZE * 0.8);
-            int nuevoAlto = (int) (CELL_SIZE * 0.8);
-
-            Image imagenRedimensionada = imagen.getScaledInstance(
-                    nuevoAncho, nuevoAlto, Image.SCALE_SMOOTH);
-
-            int x = col * CELL_SIZE + (CELL_SIZE - imagenRedimensionada.getWidth(null)) / 2;
-            int y = fila * CELL_SIZE + (CELL_SIZE - imagenRedimensionada.getHeight(null)) / 2;
-            g2d.drawImage(imagenRedimensionada, x, y, null);
-        } catch (IOException e) {
-            // Fallback a texto si la imagen no está disponible
-            dibujarPieza(g2d, pieza, fila, col);
-        }
-    }
-
-    private String getNombreImagenPieza(Pieza pieza) {
-        String color = (pieza.getColor() == org.ajedrez.entity.Color.WHITE) ? "WHITE" : "BLACK";
-
-        if (pieza instanceof Rey) return color + "K.png";
-        if (pieza instanceof Dama) return color + "Q.png";
-        if (pieza instanceof Torre) return color + "R.png";
-        if (pieza instanceof Alfil) return color + "B.png";
-        if (pieza instanceof Caballo) return color + "N.png";
-        if (pieza instanceof Peon) return color + "P.png";
-        return "unknown.png";
-    }
-
-    //reiniciar el tablero
     public void reiniciarPartida() {
-        tablero.inicializarTablero();
+        partida.reiniciar();
         seleccionada = null;
         movimientosPosibles.clear();
-        partida = new Partida(
-                new Jugador("Player 1", org.ajedrez.entity.Color.WHITE),
-                new Jugador("Player 2", org.ajedrez.entity.Color.BLACK)
-        );
         repaint();
     }
 
@@ -316,7 +459,7 @@ class TableroGUI extends JPanel {
 
         // Título
         JLabel titulo = new JLabel("Elige una pieza para la promoción:", SwingConstants.CENTER);
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titulo.setFont(new Font("Segoe UI Chess", Font.BOLD, 16));
         titulo.setForeground(COLOR_TEXTO);
         titulo.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0));
 
@@ -394,7 +537,6 @@ class TableroGUI extends JPanel {
             default: return new Dama(color, destino); // Por defecto Dama (0)
         }
     }
-
 
 
 }
