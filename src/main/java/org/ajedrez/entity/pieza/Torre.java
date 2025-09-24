@@ -9,9 +9,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Torre extends Pieza{
-
+    private boolean movida;
     public Torre(Color color, Posicion position) {
         super(color, position);
+        this.movida = false;
+    }
+
+    public boolean isMovida() {
+        return movida;
+    }
+
+    public void setMovida(boolean movida) {
+        this.movida = movida;
     }
 
     @Override
@@ -47,12 +56,12 @@ public class Torre extends Pieza{
 
         if (piezaEnDestino == null) {
             movimientos.add(new Movimiento(position, destino, this, null));
-            return true; // Puede seguir en esa dirección
+            return true;
         } else if (piezaEnDestino.getColor() != this.color) {
             movimientos.add(new Movimiento(position, destino, this, piezaEnDestino));
-            return false; // Captura y se detiene
+            return false;
         } else {
-            return false; // Bloqueado por pieza propia
+            return false;
         }
     }
 }
